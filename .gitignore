@@ -1,0 +1,5 @@
+CLAUDE.md
+MEMORY.md
+.claude/
+.DS_Store
+node_modules/

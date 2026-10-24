@@ -1,0 +1,14 @@
+{
+  "name": "files-panel",
+  "version": "0.1.0",
+  "description": "A live Files pane: every file Claude reads, edits or writes this session, as a tree, with what is happening to each and whether git has it committed",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "showPane": {
+      "type": "boolean",
+      "title": "Show the files panel",
+      "description": "The side pane listing the files Claude touched this session. Off: it never opens by itself, nothing is tracked and /files-panel says it is off.",
+      "default": true
+    }
+  }
+}

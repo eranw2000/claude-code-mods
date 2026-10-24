@@ -1,0 +1,9 @@
+{
+  "name": "claude-code-mods",
+  "description": "Live side panes for Claude Code: helper agents, shell commands, Codex runs and the files a session touches",
+  "owner": { "name": "eranw2000" },
+  "plugins": [
+    { "name": "agents-panel", "source": "./agents-panel" },
+    { "name": "files-panel", "source": "./files-panel" }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "name": "agents-panel",
+  "version": "0.3.0",
+  "description": "A live Agents pane: a progress bar for the helpers, what the main loop is doing, every shell command of the session, and one card per helper agent or Codex run with its current action, recent actions, task, progress, tokens, approximate cost and time",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "showPane": {
+      "type": "boolean",
+      "title": "Show the Agents pane",
+      "description": "The side pane with one card per helper agent. Off: it never opens by itself and /agents-panel says it is off.",
+      "default": true
+    },
+    "showBand": {
+      "type": "boolean",
+      "title": "Show the progress bar above the prompt too",
+      "description": "The helpers' progress bar (tasks done, percent and time left) is always at the top of the Agents pane. On: it is also drawn above the prompt while helpers run.",
+      "default": false
+    }
+  }
+}

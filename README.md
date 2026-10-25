@@ -14,7 +14,11 @@ Two mods for Claude Code: live side panes that show what Claude and its helpers 
   - Files outside the project folder are folded under their own heading.
   - `/files-panel` opens the pane.
 
-Both panes start over when you `/clear` or start a new conversation.
+The panes start over when you `/clear` or start a new conversation.
+
+![Three panes beside the conversation: Agents opens when a helper starts or with your first prompt, Thread lists your prompts and jumps to one on a click, and Files shows every file the session reads or edits](docs/mods-flow.png)
+
+The diagram's source is [docs/mods-flow.drawio](docs/mods-flow.drawio).
 
 ## Install
 

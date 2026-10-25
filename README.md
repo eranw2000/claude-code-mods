@@ -7,7 +7,8 @@ Two mods for Claude Code: live side panes that show what Claude and its helpers 
   - A progress bar for the current batch of helpers at the top of the pane: tasks done, percent and time left. It can also be drawn above the prompt.
   - What the main loop is doing, and every shell command of the session, with background commands kept until they report back.
   - A card for each Codex run started through `codex_delegate.py` (from [claude-release-workflow](https://github.com/eranw2000/claude-release-workflow)): what it reviews, its model and effort, live tokens from its session log, time against its limit or against how long similar past runs took, and its end in words (finished, timed out, refused, and so on).
-  - `/agents-panel` opens the pane.
+  - A Thread pane, its own tab beside Agents: each prompt you typed in this conversation, with the first paragraph of the answer under it. Click a prompt to scroll the conversation to it.
+  - `/agents-panel` opens the Agents and Thread panes.
 - **`files-panel`**: a live Files pane.
   - Every file Claude reads, edits or writes this session, as a tree, with what is happening to each one and whether git has it committed.
   - Files outside the project folder are folded under their own heading.

@@ -1,14 +1,18 @@
 # Claude Code mods
 
-Two mods for Claude Code: live side panes that show what Claude and its helpers are doing while they work. A mod is a Claude Code plugin whose hooks draw on Claude's own screen, so these panes update by themselves as the session runs.
+Two mods for Claude Code that draw three live side panes (Agents, Thread and Files), showing what Claude and its helpers are doing while they work. A mod is a Claude Code plugin whose hooks draw on Claude's own screen, so these panes update by themselves as the session runs.
 
 - **`agents-panel`**: a live Agents pane.
   - One card per helper agent: its task, what it is doing now, its recent actions, its plan steps, tokens, an approximate cost and its time. Each helper type wears its own pixel crab (a developer with headphones and a laptop, a reviewer in a graduation cap, a planner in a captain's hat, and so on).
   - A progress bar for the current batch of helpers at the top of the pane: tasks done, percent and time left. It can also be drawn above the prompt.
   - What the main loop is doing, and every shell command of the session, with background commands kept until they report back.
   - A card for each Codex run started through `codex_delegate.py` (from [claude-release-workflow](https://github.com/eranw2000/claude-release-workflow)): what it reviews, its model and effort, live tokens from its session log, time against its limit or against how long similar past runs took, and its end in words (finished, timed out, refused, and so on).
-  - A Thread pane, its own tab beside Agents: each prompt you typed in this conversation, with the first paragraph of the answer under it. Click a prompt to scroll the conversation to it.
   - `/agents-panel` opens the Agents and Thread panes.
+- **Thread pane** (comes with `agents-panel`, no separate install): your conversation at a glance, in its own tab beside Agents.
+  - Each prompt you typed in this conversation, oldest first, with the first paragraph of Claude's answer under it.
+  - A long prompt is folded; press to open it whole.
+  - Click a prompt to scroll the conversation to it.
+  - It opens with your first prompt, and `/agents-panel` opens it too.
 - **`files-panel`**: a live Files pane.
   - Every file Claude reads, edits or writes this session, as a tree, with what is happening to each one and whether git has it committed.
   - Files outside the project folder are folded under their own heading.

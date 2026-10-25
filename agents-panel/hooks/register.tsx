@@ -1811,10 +1811,14 @@ export const register: Register = (on, options) => {
       if (line) await update($, main, m => ({ ...m, lastPrompt: line, lastPromptAt: at }))
       const prompt = e.text.trim()
       if (prompt) {
+        // The conversation's first prompt opens Agents and Thread, so all the tabs are
+        // there from the start. Only the first: a pane the owner closes stays closed.
+        const isFirst = (await read($, thread)).length === 0
         await update($, thread, list => [
           ...list,
           { n: (list.at(-1)?.n ?? 0) + 1, prompt, promptAt: at, answer: '', answerAt: 0, isStopped: false },
         ].slice(-THREAD_KEEP))
+        if (isFirst && showPane) void openPanes($)
       }
     }
     if (kind === 'task-notification') {

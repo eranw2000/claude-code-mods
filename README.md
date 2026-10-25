@@ -26,7 +26,7 @@ claude plugin install agents-panel@claude-code-mods
 claude plugin install files-panel@claude-code-mods
 ```
 
-Restart Claude Code to load them. The panes open by themselves when there is something to show, or on `/agents-panel` and `/files-panel`.
+Restart Claude Code to load them. The panes open by themselves when there is something to show (Agents and Thread with your first prompt), or on `/agents-panel` and `/files-panel`.
 
 To update later:
 

@@ -140,6 +140,23 @@ export type ShellRow = {
   endsWithOwner: boolean
 }
 
+// One prompt the owner typed, and the first paragraph of the main loop's
+// latest answer after it.
+export type ThreadEntry = {
+  // Counts from 1 in the conversation.
+  n: number
+  prompt: string
+  promptAt: number
+  // '' until a turn after the prompt ends with visible text.
+  answer: string
+  answerAt: number
+  // True when the newest turn after the prompt was interrupted.
+  isStopped: boolean
+  // The transcript row the prompt was stored as, so a click can scroll to it.
+  // Absent until the row is stored, and on entries kept before 0.6.0.
+  rowId?: string
+}
+
 declare module 'claude-code' {
   interface PluginState {
     'agents-panel': {
@@ -154,6 +171,8 @@ declare module 'claude-code' {
       openPrompts: string[]
       // The conversation the cards belong to; a new id clears them.
       sessionId: string
+      // The Thread pane: the owner's prompts, oldest first.
+      thread: ThreadEntry[]
     }
   }
 }

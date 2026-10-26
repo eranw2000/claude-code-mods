@@ -1,0 +1,14 @@
+{
+  "name": "thread-panel",
+  "version": "0.1.1",
+  "description": "A live Thread pane: each prompt you typed in this conversation, with the first paragraph of the answer under it; click a prompt to jump to it in the conversation",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "showPane": {
+      "type": "boolean",
+      "title": "Show the Thread pane",
+      "description": "The side pane listing your prompts and the answers. Off: it never opens by itself and /thread-panel says it is off.",
+      "default": true
+    }
+  }
+}

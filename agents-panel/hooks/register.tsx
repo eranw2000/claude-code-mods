@@ -1,12 +1,9 @@
 import { atom, read, update } from 'claude-code'
 import type { AgentStatus, EngineInterface, Register, ToolCallInput, ToolCallResult } from 'claude-code'
 
-import type { Activity, AgentCard, CodexRun, MainRow, PlanStep, ShellRow, ThreadEntry } from '../types'
+import type { Activity, AgentCard, CodexRun, MainRow, PlanStep, ShellRow } from '../types'
 
 const PANE = 'agents-panel'
-// The Thread pane: its own id, so the engine draws it as its own tab beside
-// Agents (and Files), not as a view inside the Agents pane.
-const THREAD_PANE = 'agents-panel-thread'
 const agents = atom({ plugin: 'agents-panel', key: 'agents' } as const, {})
 const isCollapsed = atom({ plugin: 'agents-panel', key: 'isCollapsed' } as const, true)
 const now = atom({ plugin: 'agents-panel', key: 'now' } as const, 0)
@@ -19,18 +16,15 @@ const isShellsCollapsed = atom({ plugin: 'agents-panel', key: 'isShellsCollapsed
 const openPrompts = atom({ plugin: 'agents-panel', key: 'openPrompts' } as const, [] as string[])
 // The conversation the cards belong to; '' until the first event reads it.
 const sessionId = atom({ plugin: 'agents-panel', key: 'sessionId' } as const, '')
-const thread = atom({ plugin: 'agents-panel', key: 'thread' } as const, [] as ThreadEntry[])
+// Whether the owner has typed a prompt in this conversation yet: the first one
+// opens the pane.
+const hasPrompted = atom({ plugin: 'agents-panel', key: 'hasPrompted' } as const, false)
 
 // How many actions a card lists, how much of a prompt it shows folded, and
 // how many finished shells the pane keeps.
 const RECENT = 5
 const PROMPT_PREVIEW = 200
 const FINISHED_SHELLS = 10
-// The Thread pane keeps this many prompts, shows this much of a prompt folded,
-// and this much of an answer's first paragraph.
-const THREAD_KEEP = 200
-const THREAD_PROMPT = 300
-const THREAD_ANSWER = 800
 
 // The band stays this long after the last helper of a batch ends, showing 100%.
 const GRACE_MS = 10_000
@@ -126,11 +120,6 @@ function oneLine(text: string): string {
 
 function firstLine(text: string): string {
   return text.split('\n').map(l => l.trim()).find(l => l !== '') ?? ''
-}
-
-// The text up to its first blank line, on one line.
-function firstParagraph(text: string): string {
-  return oneLine(text.trim().split(/\n\s*\n/)[0] ?? '')
 }
 
 // A span as the status line writes it: 40s, 5m14s, 2h3m.
@@ -1539,40 +1528,12 @@ async function togglePrompt($: EngineInterface, id: string) {
   await update($, openPrompts, ids => ids.includes(id) ? ids.filter(i => i !== id) : [...ids, id])
 }
 
-// The stored row carries no prompt number, so it goes to the oldest prompt with
-// the same text still without a row, else the newest one without a row: the
-// row is stored right after its prompt.submit.
-async function noteThreadRow($: EngineInterface, text: string, rowId: string) {
-  await update($, thread, list => {
-    if (list.some(x => x.rowId === rowId)) return list
-    const open = list.filter(x => !x.rowId)
-    const target = open.find(x => x.prompt === text) ?? open.at(-1)
-    return target ? list.map(x => x === target ? { ...x, rowId } : x) : list
-  })
-}
-
-// Scrolls the transcript to the prompt's row. The engine moves a transcript row
-// only for the person's own press, and says why when it cannot.
-async function jumpTo($: EngineInterface, rowId: string) {
-  let why: string | undefined
-  try {
-    why = (await $.ui.scroll({ to: { requestId: rowId }, block: 'start' })).deny
-  } catch (err) {
-    why = err instanceof Error ? err.message : String(err)
-  }
-  if (why) await $.ui.toast(fit(`Thread: cannot jump to that message (${oneLine(why)})`, 160))
-}
-
 function wake($: EngineInterface) {
   if (!ticker) ticker = $.clock.every(1000, () => tick($))
 }
 
-// Agents first, then Thread, so the Thread tab sits beside the Agents tab. Both
-// are asked for at once, in that order, so Thread never waits on Agents.
-async function openPanes($: EngineInterface) {
-  const agentsPane = $.ui.open({ id: PANE, title: 'Agents' })
-  const threadPane = $.ui.open({ id: THREAD_PANE, title: 'Thread' })
-  await Promise.all([agentsPane, threadPane])
+async function openPane($: EngineInterface) {
+  await $.ui.open({ id: PANE, title: 'Agents' })
 }
 
 // Drops every card, shell and the main row: what an earlier conversation left.
@@ -1582,7 +1543,7 @@ async function forget($: EngineInterface) {
   await update($, main, () => ({ ...IDLE, lastPrompt: '', lastPromptAt: 0 }))
   await update($, hiddenIds, () => [])
   await update($, openPrompts, () => [])
-  await update($, thread, () => [])
+  await update($, hasPrompted, () => false)
 }
 
 // A /clear or a resume keeps the process, and so this state, but starts another
@@ -1647,8 +1608,8 @@ export const register: Register = (on, options) => {
     if (!showPane) {
       return { text: 'The Agents pane is switched off. Turn "Show the Agents pane" back on in /config.' }
     }
-    await openPanes($)
-    return { text: 'Agents and Thread panes opened.' }
+    await openPane($)
+    return { text: 'Agents pane opened.' }
   })
 
   // A /clear or a resume ends this conversation while the process goes on: drop
@@ -1681,7 +1642,7 @@ export const register: Register = (on, options) => {
         },
       }))
       wake($)
-      if (showPane) void openPanes($)
+      if (showPane) void openPane($)
     }
     return result
   })
@@ -1754,12 +1715,12 @@ export const register: Register = (on, options) => {
         },
       }))
       wake($)
-      if (showPane) void openPanes($)
+      if (showPane) void openPane($)
     }
     if (isShell) {
       await startShell($, id, e, at)
       wake($)
-      if (showPane && opensPane(e)) void openPanes($)
+      if (showPane && opensPane(e)) void openPane($)
     }
     let result: ToolCallResult | undefined
     try {
@@ -1781,22 +1742,6 @@ export const register: Register = (on, options) => {
       await edit($, e.agentId!, card => ({ ...card, status, endedAt: at, lastTool: '' }))
       await endOwnedShells($, e.agentId, at)
       await endOwnedCodex($, e.agentId, at)
-    } else {
-      // The main loop's answer goes under the newest prompt. A later turn with
-      // no prompt of its own (a background job's notice) replaces it, so the
-      // tab shows where the work ended up.
-      const answer = fit(firstParagraph(e.answer), THREAD_ANSWER)
-      if (answer || e.isAborted) {
-        const at = await $.clock.now()
-        await update($, thread, list => {
-          const last = list.at(-1)
-          if (!last) return list
-          const entry = answer
-            ? { ...last, answer, answerAt: at, isStopped: e.isAborted }
-            : { ...last, isStopped: true }
-          return [...list.slice(0, -1), entry]
-        })
-      }
     }
     return next(e)
   })
@@ -1809,16 +1754,15 @@ export const register: Register = (on, options) => {
     if ((kind === 'composer' || kind === 'bridge') && !e.isMeta) {
       const line = fit(oneLine(e.text), 300)
       if (line) await update($, main, m => ({ ...m, lastPrompt: line, lastPromptAt: at }))
-      const prompt = e.text.trim()
-      if (prompt) {
-        // The conversation's first prompt opens Agents and Thread, so all the tabs are
-        // there from the start. Only the first: a pane the owner closes stays closed.
-        const isFirst = (await read($, thread)).length === 0
-        await update($, thread, list => [
-          ...list,
-          { n: (list.at(-1)?.n ?? 0) + 1, prompt, promptAt: at, answer: '', answerAt: 0, isStopped: false },
-        ].slice(-THREAD_KEEP))
-        if (isFirst && showPane) void openPanes($)
+      if (e.text.trim()) {
+        // The conversation's first prompt opens the pane, so the tab is there from
+        // the start. Only the first: a pane the owner closes stays closed.
+        let isFirst = false
+        await update($, hasPrompted, was => {
+          isFirst = !was
+          return true
+        })
+        if (isFirst && showPane) void openPane($)
       }
     }
     if (kind === 'task-notification') {
@@ -1831,14 +1775,6 @@ export const register: Register = (on, options) => {
   // A notification delivered into a helper's loop reaches it as a row, not a prompt.
   on('session.append', async ($, e, next) => {
     await fresh($, e.agentId)
-    const kind = e.origin.kind
-    if (!e.agentId && e.door === 'prompt' && (kind === 'composer' || kind === 'bridge') && !e.message.isMeta) {
-      const text = e.message.content
-        .map(b => (b as { type: string; text?: unknown }).type === 'text' ? str((b as { text?: unknown }).text) : '')
-        .join('\n')
-        .trim()
-      await noteThreadRow($, text, e.uuid)
-    }
     if (e.origin.kind === 'task-notification') {
       const body = e.message.content
         .map(b => (b as { type: string; text?: unknown }).type === 'text' ? str((b as { text?: unknown }).text) : '')
@@ -1880,64 +1816,6 @@ export const register: Register = (on, options) => {
         <Text dimColor>{eta}</Text>
         <Text color={BAND_ORANGE}>{count}</Text>
         <Button key="hide" label="Hide" onPress={() => hideBand($)} />
-      </Box>
-    )
-  })
-
-  // The Thread pane: each prompt the owner typed, oldest first, with the first
-  // paragraph of the main loop's answer under it.
-  on('ui.render', { component: 'Pane', requestId: THREAD_PANE }, async ($, e) => {
-    const { Box, Text, Button } = $.ui.resolve(e)
-    if (!showPane) {
-      return <Text dimColor>The Agents and Thread panes are switched off in /config.</Text>
-    }
-    const entries = await read($, thread)
-    const opened = await read($, openPrompts)
-    const t = Math.max(await read($, now), await $.clock.now())
-    const entry = (x: ThreadEntry) => {
-      const id = `thread-${x.n}`
-      const isOpen = opened.includes(id)
-      const asked = oneLine(x.prompt)
-      const isLong = asked.length > THREAD_PROMPT
-      // Click the prompt to scroll the conversation to it.
-      const shown = isOpen ? x.prompt : isLong ? `${asked.slice(0, THREAD_PROMPT)}…` : asked
-      const reply = x.answer
-        ? x.answer
-        : x.isStopped ? '(stopped before an answer)' : '(working…)'
-      return (
-        <Box key={id} flexDirection="column" marginTop={1}>
-          <Text wrap="truncate-end">
-            <Text color={BAND_ORANGE} bold>#{x.n} You</Text>
-            <Text dimColor> · {span(t - x.promptAt)} ago</Text>
-          </Text>
-          {x.rowId
-            ? (
-              <Button key={`jump-${id}`} plain onPress={() => jumpTo($, x.rowId!)}>
-                <Text>{shown}</Text>
-              </Button>
-            )
-            : <Text>{shown}</Text>}
-          {isLong && (
-            <Button
-              key={`open-${id}`}
-              plain
-              label={isOpen ? '▾ Hide the prompt' : '▸ Show the whole prompt'}
-              onPress={() => togglePrompt($, id)}
-            />
-          )}
-          <Text wrap="truncate-end">
-            <Text color="success" bold>Claude</Text>
-            {x.answerAt ? <Text dimColor> · {span(t - x.answerAt)} ago{x.isStopped ? ' · stopped' : ''}</Text> : null}
-          </Text>
-          <Text dimColor={!x.answer}>{reply}</Text>
-        </Box>
-      )
-    }
-    return (
-      <Box flexDirection="column" paddingX={1}>
-        <Text bold>{plural(entries.length, 'prompt')} in this conversation</Text>
-        {entries.length === 0 && <Text dimColor>Nothing typed yet in this conversation.</Text>}
-        {entries.map(entry)}
       </Box>
     )
   })

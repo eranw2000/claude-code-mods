@@ -1,7 +1,7 @@
 {
   "name": "agents-panel",
-  "version": "0.6.1",
-  "description": "A live Agents pane: a progress bar for the helpers, what the main loop is doing, every shell command of the session, and one card per helper agent or Codex run with its current action, recent actions, task, progress, tokens, approximate cost and time; plus a Thread pane, its own tab beside Agents, with each prompt you typed and the first paragraph of the answer; click a prompt to jump to it in the conversation",
+  "version": "0.7.0",
+  "description": "A live Agents pane: a progress bar for the helpers, what the main loop is doing, every shell command of the session, and one card per helper agent or Codex run with its current action, recent actions, task, progress, tokens, approximate cost and time",
   "types": "./types/index.d.ts",
   "userConfig": {
     "showPane": {

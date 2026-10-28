@@ -4,6 +4,10 @@ Three mods for Claude Code that draw three live side panes (Agents, Thread and F
 
 - **`agents-panel`**: a live Agents pane.
   - One card per helper agent: its task, what it is doing now, its recent actions, its plan steps, tokens, an approximate cost and its time. Each helper type wears its own pixel crab (a developer with headphones and a laptop, a reviewer in a graduation cap, a planner in a captain's hat, and so on).
+
+    ![The crab map: twelve pixel crabs, one per hat and colour, each with the helper types that wear it, from the developer in headphones with a laptop to the bare crab that any other type gets](docs/crab-map.png)
+
+    The map is generated from the mod's own sprite table in `agents-panel/hooks/register.tsx`.
   - A progress bar for the current batch of helpers at the top of the pane: tasks done, percent and time left. It can also be drawn above the prompt.
   - What the main loop is doing, and every shell command of the session, with background commands kept until they report back.
   - A card for each Codex run started through `codex_delegate.py` (from [claude-release-workflow](https://github.com/eranw2000/claude-release-workflow)): what it reviews, its model and effort, live tokens from its session log, time against its limit or against how long similar past runs took, and its end in words (finished, timed out, refused, and so on).

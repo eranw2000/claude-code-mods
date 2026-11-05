@@ -1,0 +1,14 @@
+{
+  "name": "usage-panel",
+  "version": "0.1.0",
+  "description": "A live Usage pane: the signed-in account's email and plan, and how much of each usage limit is used, with when it resets",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "showPane": {
+      "type": "boolean",
+      "title": "Show the Usage pane",
+      "description": "The side pane with your account and your usage limits. Off: it never opens by itself, nothing is read and /usage-panel says it is off.",
+      "default": true
+    }
+  }
+}

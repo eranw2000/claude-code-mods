@@ -1,6 +1,6 @@
 {
   "name": "agents-panel",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "A live Agents pane: a progress bar for the helpers, what the main loop is doing, every shell command of the session, and one card per helper agent or Codex run with its current action, recent actions, task, progress, tokens, approximate cost and time",
   "types": "./types/index.d.ts",
   "userConfig": {

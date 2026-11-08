@@ -1,0 +1,21 @@
+{
+  "name": "helper-panel",
+  "version": "0.3.0",
+  "description": "A Helper pane: type a question about this conversation and get an answer from a fork of the session's own transcript, or ask for work and press Do it to have a helper do it with tools; the line and the result stay in the pane, out of the chat",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "showPane": {
+      "type": "boolean",
+      "title": "Show the Helper pane",
+      "description": "The side pane with the question box. Off: it never opens by itself and /helper-panel says it is off.",
+      "default": true
+    },
+    "effort": {
+      "type": "string",
+      "title": "How hard the Helper pane thinks",
+      "description": "session: as hard as the main work, and the answer reads the conversation from the prompt cache. A fixed level can make the first answer at that level re-send the whole conversation once.",
+      "options": ["session", "low", "medium", "high"],
+      "default": "session"
+    }
+  }
+}

@@ -1536,6 +1536,22 @@ async function openPane($: EngineInterface) {
   await $.ui.open({ id: PANE, title: 'Agents' })
 }
 
+// Opening an open pane does not raise it, so a pane already up before the
+// conversation's first prompt (/agents-panel typed first, a helper that started
+// first) is closed and opened again, which makes it the newest.
+async function openInFront($: EngineInterface) {
+  let isUp = false
+  try {
+    isUp = (await $.ui.panes()).some(pane => pane.id === PANE)
+  } catch {}
+  if (isUp) {
+    try {
+      await $.ui.close({ id: PANE })
+    } catch {}
+  }
+  await openPane($)
+}
+
 // Drops every card, shell and the main row: what an earlier conversation left.
 async function forget($: EngineInterface) {
   await update($, agents, () => ({}))
@@ -1751,25 +1767,31 @@ export const register: Register = (on, options) => {
     await fresh($)
     const at = await $.clock.now()
     const kind = e.origin.kind
+    let opensNow = false
     if ((kind === 'composer' || kind === 'bridge') && !e.isMeta) {
       const line = fit(oneLine(e.text), 300)
       if (line) await update($, main, m => ({ ...m, lastPrompt: line, lastPromptAt: at }))
       if (e.text.trim()) {
         // The conversation's first prompt opens the pane, so the tab is there from
         // the start. Only the first: a pane the owner closes stays closed.
-        let isFirst = false
         await update($, hasPrompted, was => {
-          isFirst = !was
+          opensNow = !was
           return true
         })
-        if (isFirst && showPane) void openPane($)
       }
     }
     if (kind === 'task-notification') {
       await noteShells($, e.text, at)
       await noteCodex($, e.text, at)
     }
-    return next(e)
+    const result = await next(e)
+    // Opened after the plugins beneath, so this is the newest pane of the first
+    // prompt: the surface shows the newest opened pane, and this one should be
+    // the one in front when a session starts. The other mods
+    // open theirs before their next(e). Re-opening an open pane does not raise it,
+    // so only the order of the opens decides.
+    if (opensNow && showPane) await openInFront($)
+    return result
   }).catch(($, e, next) => next(e))
 
   // A notification delivered into a helper's loop reaches it as a row, not a prompt.

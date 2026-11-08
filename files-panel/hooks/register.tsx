@@ -487,6 +487,19 @@ export const register: Register = (on, options) => {
   // turn that touches no file.
   on('prompt.submit', async ($, e, next) => {
     await fresh($)
+    // The owner's first prompt opens the pane too, before the plugins beneath run,
+    // so the tab is there from the start.
+    const kind = e.origin.kind
+    if (showPane && (kind === 'composer' || kind === 'bridge') && !e.isMeta && e.text.trim()) {
+      let isFirst = false
+      await update($, hasOpened, was => {
+        isFirst = !was
+        return true
+      })
+      // Awaited: an open still in flight when the plugins beneath run could
+      // land after the Agents open and take the front.
+      if (isFirst) await openPane($)
+    }
     return next(e)
   }).catch(($, e, next) => next(e))
 

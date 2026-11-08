@@ -1,11 +1,12 @@
 {
   "name": "claude-code-mods",
-  "description": "Live side panes for Claude Code: helper agents, shell commands, Codex runs, your prompts with Claude's answers, the files a session touches, and your account's usage limits",
+  "description": "Live side panes for Claude Code: helper agents, shell commands, Codex runs, your prompts with Claude's answers, the files a session touches, your account's usage limits, and a box that answers questions about the chat or does work for you",
   "owner": { "name": "eranw2000" },
   "plugins": [
     { "name": "agents-panel", "source": "./agents-panel" },
     { "name": "files-panel", "source": "./files-panel" },
     { "name": "thread-panel", "source": "./thread-panel" },
-    { "name": "usage-panel", "source": "./usage-panel" }
+    { "name": "usage-panel", "source": "./usage-panel" },
+    { "name": "helper-panel", "source": "./helper-panel" }
   ]
 }

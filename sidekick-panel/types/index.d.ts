@@ -1,4 +1,4 @@
-// One question typed into the Helper pane, and what came back.
+// One question typed into the Sidekick pane, and what came back.
 export type AskStatus = 'asking' | 'answered' | 'failed'
 
 // 'ask' is answered with no tools; 'do' is a line starting with "!", carried
@@ -34,7 +34,7 @@ export type AskEntry = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'helper-panel': {
+    'sidekick-panel': {
       // Newest last. Dropped on /clear or a resume: they were about the old
       // conversation.
       entries: Shaped<AskEntry[]>

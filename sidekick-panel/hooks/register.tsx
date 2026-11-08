@@ -12,7 +12,7 @@ import type {
 
 import type { AskEntry, AskKind } from '../types'
 
-// The Helper pane: a box over this conversation that answers and acts. Each question is
+// The Sidekick pane: a box over this conversation that answers and acts. Each question is
 // answered by a fork of the session's own transcript ($.model.fork), so the
 // model sees everything said so far, and neither the question nor the answer
 // enters the conversation: they live here alone.
@@ -22,20 +22,20 @@ import type { AskEntry, AskKind } from '../types'
 // runs in the background under the session's own permission rules and hooks,
 // and its report arrives as its own turn.complete. A helper a mod starts adds
 // no notification or row to the main conversation.
-const PANE = 'helper-panel'
-const entries = atom({ plugin: 'helper-panel', key: 'entries' } as const, [] as AskEntry[], {
+const PANE = 'sidekick-panel'
+const entries = atom({ plugin: 'sidekick-panel', key: 'entries' } as const, [] as AskEntry[], {
   shape: 'entries-1',
 })
-const sessionId = atom({ plugin: 'helper-panel', key: 'sessionId' } as const, '')
-const gen = atom({ plugin: 'helper-panel', key: 'gen' } as const, 0)
-const now = atom({ plugin: 'helper-panel', key: 'now' } as const, 0)
+const sessionId = atom({ plugin: 'sidekick-panel', key: 'sessionId' } as const, '')
+const gen = atom({ plugin: 'sidekick-panel', key: 'gen' } as const, 0)
+const now = atom({ plugin: 'sidekick-panel', key: 'now' } as const, 0)
 // The pane opens by itself once per conversation (at the process start, or on
 // the conversation's first prompt), never again on a reload: a reload runs
 // session.start again, and a pane opened then would come in front of Agents.
-const hasOpened = atom({ plugin: 'helper-panel', key: 'hasOpened' } as const, false)
+const hasOpened = atom({ plugin: 'sidekick-panel', key: 'hasOpened' } as const, false)
 // The main loop's newest reply, handed to the fork until the next prompt
 // carries it in the transcript.
-const lastAnswer = atom({ plugin: 'helper-panel', key: 'lastAnswer' } as const, '')
+const lastAnswer = atom({ plugin: 'sidekick-panel', key: 'lastAnswer' } as const, '')
 
 // The pane keeps this many questions, and this much of a question, of an
 // answer, and of the newest reply handed to the fork.
@@ -339,7 +339,7 @@ export async function act($: EngineInterface, request: string, typed = true) {
       started = await $.agent.spawn({
         subagentType: 'fork',
         prompt: doPrompt(request, reply ?? ''),
-        description: fit(`Helper pane: ${request}`, DESCRIPTION_KEEP),
+        description: fit(`Sidekick pane: ${request}`, DESCRIPTION_KEEP),
       })
     } catch (err) {
       failure = err instanceof Error ? err.message : String(err)
@@ -430,12 +430,12 @@ async function openOnce($: EngineInterface) {
     first = !was
     return true
   })
-  if (first) await $.ui.open({ id: PANE, title: 'Helper' })
+  if (first) await $.ui.open({ id: PANE, title: 'Sidekick' })
 }
 
 async function openPane($: EngineInterface) {
   await update($, hasOpened, () => true)
-  await $.ui.open({ id: PANE, title: 'Helper' })
+  await $.ui.open({ id: PANE, title: 'Sidekick' })
 }
 
 // The clear button: drops the list, but not work still being done, whose
@@ -516,8 +516,8 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     await $.command.register({
-      name: 'helper-panel',
-      description: 'Show the Helper pane: a box over this conversation that answers and does work, out of the chat',
+      name: 'sidekick-panel',
+      description: 'Show the Sidekick pane: a box over this conversation that answers and does work, out of the chat',
     })
     const result = await next(e)
     await fresh($)
@@ -526,12 +526,12 @@ export const register: Register = (on, options) => {
     return result
   })
 
-  on('command.run', { command: 'helper-panel' }, async $ => {
+  on('command.run', { command: 'sidekick-panel' }, async $ => {
     if (!showPane) {
-      return { text: 'The Helper pane is switched off. Turn "Show the Helper pane" back on in /config.' }
+      return { text: 'The Sidekick pane is switched off. Turn "Show the Sidekick pane" back on in /config.' }
     }
     await openPane($)
-    return { text: 'Helper pane opened.' }
+    return { text: 'Sidekick pane opened.' }
   })
 
   // A /clear or a resume ends this conversation while the process goes on: drop

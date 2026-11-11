@@ -1,16 +1,18 @@
 import { atom, read, update } from 'claude-code'
 import type { AgentStatus, EngineInterface, Register, ToolCallInput, ToolCallResult } from 'claude-code'
 
-import type { Activity, AgentCard, CodexRun, MainRow, PlanStep, ShellRow } from '../types'
+import type { Activity, AgentCard, ChecklistStep, CodexRun, MainRow, PlanStep, ShellRow } from '../types'
 
 const PANE = 'agents-panel'
+// The main session's own task list, its own tab right after Agents.
+const CHECKLIST_PANE = 'agents-panel-checklist'
 const agents = atom({ plugin: 'agents-panel', key: 'agents' } as const, {})
 const isCollapsed = atom({ plugin: 'agents-panel', key: 'isCollapsed' } as const, true)
 const now = atom({ plugin: 'agents-panel', key: 'now' } as const, 0)
 // The ids of every helper known when the band was hidden; a new id shows it again.
 const hiddenIds = atom({ plugin: 'agents-panel', key: 'hiddenIds' } as const, [] as string[])
 const IDLE: Activity = { doing: '', doingAt: 0, active: 0, idleSince: 0, said: '', saidAt: 0, recent: [] }
-const main = atom({ plugin: 'agents-panel', key: 'main' } as const, { ...IDLE, lastPrompt: '', lastPromptAt: 0 } as MainRow)
+const main = atom({ plugin: 'agents-panel', key: 'main' } as const, { ...IDLE, lastPrompt: '', lastPromptAt: 0, turnAt: 0 } as MainRow)
 const shells = atom({ plugin: 'agents-panel', key: 'shells' } as const, {} as Record<string, ShellRow>)
 const isShellsCollapsed = atom({ plugin: 'agents-panel', key: 'isShellsCollapsed' } as const, true)
 const openPrompts = atom({ plugin: 'agents-panel', key: 'openPrompts' } as const, [] as string[])
@@ -19,6 +21,7 @@ const sessionId = atom({ plugin: 'agents-panel', key: 'sessionId' } as const, ''
 // Whether the owner has typed a prompt in this conversation yet: the first one
 // opens the pane.
 const hasPrompted = atom({ plugin: 'agents-panel', key: 'hasPrompted' } as const, false)
+const checklist = atom({ plugin: 'agents-panel', key: 'checklist' } as const, [] as ChecklistStep[])
 
 // How many actions a card lists, how much of a prompt it shows folded, and
 // how many finished shells the pane keeps.
@@ -198,6 +201,15 @@ function doingNow(a: Activity, t: number): [string, string] {
   return ['', '']
 }
 
+// The main loop's state in a few words: a tool call in flight, its turn running,
+// or waiting, on helpers and shells (whose end wakes it) or on the owner.
+function mainStateOf(m: MainRow, helpers: number, shells: number): string {
+  if (m.active > 0 && m.doing) return `Running ${m.doing}`
+  if (m.turnAt) return 'Thinking'
+  const on = [helpers ? plural(helpers, 'agent') : '', shells ? plural(shells, 'shell') : ''].filter(Boolean)
+  return on.length ? `Waiting on ${on.join(' · ')}` : 'Waiting for you'
+}
+
 // A line cut to `cols` from its head, so its tail (an age, a state) stays whole.
 function withTail(head: string, tail: string, cols: number): string {
   return fit(head, Math.max(4, cols - tail.length)) + tail
@@ -234,6 +246,119 @@ function planAfter(plan: PlanStep[], e: ToolCallInput, result: ToolCallResult | 
 }
 
 const PLAN_TOOLS = ['TodoWrite', 'TaskCreate', 'TaskUpdate']
+
+// The group and owner a task-list call carries in its `metadata`: "group" names
+// the heading, and any "owner" value marks a step only you can do. A key set to
+// null (TaskUpdate's way to delete a key) clears it; a key not sent is undefined.
+function metaOf(raw: unknown): { group?: string, isOwners?: boolean } {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const m = raw as Record<string, unknown>
+  const out: { group?: string, isOwners?: boolean } = {}
+  if ('group' in m) out.group = m.group === null ? '' : oneLine(str(m.group))
+  if ('owner' in m) out.isOwners = typeof m.owner === 'string' && m.owner.trim() !== ''
+  return out
+}
+
+// Whether a task-list call did what it asked: not refused, not an error, and
+// for TaskCreate a real id back (a TaskUpdate on that id is the only way to
+// finish the step), for TaskUpdate `success: true`. A failed call must leave
+// the checklist as it was, or it shows a step that does not exist.
+function taskCallSucceeded(e: ToolCallInput, result: ToolCallResult | undefined): boolean {
+  if (!result || result.deny || result.isError) return false
+  const r = result.result as Record<string, unknown> | undefined
+  if (e.tool === 'TaskCreate') return !!str((r?.task as Record<string, unknown> | undefined)?.id)
+  if (e.tool === 'TaskUpdate') return r?.success === true
+  return true
+}
+
+// The main session's checklist after one task-list call: the helpers' parser,
+// plus the group and owner read from the call's metadata.
+function checklistAfter(list: ChecklistStep[], e: ToolCallInput, result: ToolCallResult | undefined): ChecklistStep[] {
+  const a = e as unknown as Record<string, unknown>
+  const steps = planAfter(list, e, result)
+  const meta = metaOf(a.metadata)
+  const byId = new Map(list.map(s => [s.id, s]))
+  if (e.tool === 'TaskCreate') {
+    return steps.map((s, i) => i < list.length ? s as ChecklistStep
+      : { ...s, group: meta.group ?? '', isOwners: meta.isOwners ?? false })
+  }
+  if (e.tool === 'TaskUpdate') {
+    const id = str(a.taskId)
+    return steps.map(s => {
+      const was = byId.get(s.id) ?? { group: '', isOwners: false }
+      const step = { ...s, group: was.group, isOwners: was.isOwners } as ChecklistStep
+      if (s.id !== id) return step
+      return { ...step, group: meta.group ?? step.group, isOwners: meta.isOwners ?? step.isOwners }
+    })
+  }
+  // TodoWrite replaces the whole list and has no metadata.
+  return steps.map(s => ({ ...s, group: '', isOwners: false }))
+}
+
+// The session's task list as Claude Code saves it, one `<id>.json` per task
+// under `<config dir>/tasks/<session id>/` (each file holds id, subject,
+// activeForm, status and metadata). Read when this conversation is first seen,
+// so a resumed session shows its list again. Anything that does not parse as a
+// task is skipped; a missing folder gives [].
+async function savedChecklist($: EngineInterface, sessionId: string): Promise<ChecklistStep[]> {
+  let configDir = ''
+  try {
+    configDir = (await $.env.get('CLAUDE_CONFIG_DIR')) || `${(await $.env.get('HOME')) ?? ''}/.claude`
+  } catch {
+    return []
+  }
+  if (!sessionId || configDir === '/.claude') return []
+  const dir = `${configDir}/tasks/${sessionId}`
+  let names: string[] = []
+  try {
+    names = (await $.fs.list(dir)).filter(f => f.kind === 'file' && /^\d+\.json$/.test(f.name)).map(f => f.name)
+  } catch {
+    return []
+  }
+  const steps: ChecklistStep[] = []
+  for (const name of names) {
+    try {
+      const raw = JSON.parse(await $.fs.read(`${dir}/${name}`) as string) as unknown
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
+      const t = raw as Record<string, unknown>
+      if (typeof t.id !== 'string' || typeof t.subject !== 'string') continue
+      const status = t.status === 'completed' || t.status === 'in_progress' || t.status === 'pending' ? t.status : undefined
+      if (!status) continue
+      const meta = metaOf(t.metadata)
+      steps.push({
+        id: t.id, title: oneLine(t.subject), active: oneLine(str(t.activeForm)), status,
+        group: meta.group ?? '', isOwners: meta.isOwners ?? false,
+      })
+    } catch {}
+  }
+  return steps.sort((a, b) => Number(a.id) - Number(b.id))
+}
+
+// The checklist's footer: Done, Now and You lines worked out from the rows.
+function checklistFooter(list: ChecklistStep[]): { done: string, now: string, you: string } {
+  const done = list.filter(s => s.status === 'completed').length
+  const running = list.filter(s => s.status === 'in_progress').map(s => s.active || s.title)
+  const yours = list.filter(s => s.isOwners && s.status !== 'completed').map(s => s.title)
+  return {
+    done: `Done: ${done} of ${plural(list.length, 'task')}.`,
+    now: `Now: ${running.length ? running.join('; ') : 'nothing running'}.`,
+    you: `You: ${yours.length ? yours.join('; ') : 'nothing yet'}.`,
+  }
+}
+
+// The checklist's headings in the order they first appear, each with its steps.
+// Steps with no group sit under "Other" when other groups exist, else under no heading.
+function checklistGroups(list: ChecklistStep[]): { heading: string, steps: ChecklistStep[] }[] {
+  // A Map, so a group named "constructor" or "__proto__" is just a name.
+  const by = new Map<string, ChecklistStep[]>()
+  for (const s of list) {
+    const steps = by.get(s.group)
+    if (steps) steps.push(s)
+    else by.set(s.group, [s])
+  }
+  const isGrouped = [...by.keys()].some(g => g !== '')
+  return [...by].map(([g, steps]) => ({ heading: g || (isGrouped ? 'Other' : ''), steps }))
+}
 
 // A background task's notification, read from its tags. The summary is never
 // kept: only the ids, the status word and an exit code.
@@ -608,6 +733,9 @@ async function hideBand($: EngineInterface) {
 }
 
 let window = 1_000_000
+// Bumped by forget(): a task call that started before a /clear or a resume
+// finishes into a list that is no longer its conversation's, and is dropped.
+let epoch = 0
 let ticker: { cancel: () => void } | undefined
 
 // Only agent.spawn and the list read at session.start make a card. A helper of
@@ -635,12 +763,19 @@ async function beginCall($: EngineInterface, e: ToolCallInput, at: number) {
 }
 
 // A tool call ends; a helper's task-list call also updates its plan.
-async function endCallOn($: EngineInterface, e: ToolCallInput, result: ToolCallResult | undefined, at: number) {
+async function endCallOn($: EngineInterface, e: ToolCallInput, result: ToolCallResult | undefined, at: number, callEpoch: number) {
+  const isPlan = PLAN_TOOLS.includes(e.tool)
   if (e.agentId) {
-    const isPlan = PLAN_TOOLS.includes(e.tool)
     await edit($, e.agentId, c => ({ ...endCall(c, at), plan: isPlan ? planAfter(c.plan, e, result) : c.plan }))
   } else {
     await update($, main, m => endCall(m, at))
+  }
+  // The session's task list is one list that helpers write too, so a helper's
+  // TaskUpdate on a step the checklist holds moves it; a helper's own new
+  // steps and its TodoWrite stay on its card.
+  const isChecklistCall = isPlan && (!e.agentId || e.tool === 'TaskUpdate')
+  if (isChecklistCall && epoch === callEpoch && taskCallSucceeded(e, result)) {
+    await update($, checklist, l => checklistAfter(l, e, result))
   }
 }
 
@@ -1536,6 +1671,10 @@ async function openPane($: EngineInterface) {
   await $.ui.open({ id: PANE, title: 'Agents' })
 }
 
+async function openChecklist($: EngineInterface) {
+  await $.ui.open({ id: CHECKLIST_PANE, title: 'Checklist' })
+}
+
 // Opening an open pane does not raise it, so a pane already up before the
 // conversation's first prompt (/agents-panel typed first, a helper that started
 // first) is closed and opened again, which makes it the newest.
@@ -1554,12 +1693,14 @@ async function openInFront($: EngineInterface) {
 
 // Drops every card, shell and the main row: what an earlier conversation left.
 async function forget($: EngineInterface) {
+  epoch++
   await update($, agents, () => ({}))
   await update($, shells, () => ({}))
-  await update($, main, () => ({ ...IDLE, lastPrompt: '', lastPromptAt: 0 }))
+  await update($, main, () => ({ ...IDLE, lastPrompt: '', lastPromptAt: 0, turnAt: 0 }))
   await update($, hiddenIds, () => [])
   await update($, openPrompts, () => [])
   await update($, hasPrompted, () => false)
+  await update($, checklist, () => [])
 }
 
 // A /clear or a resume keeps the process, and so this state, but starts another
@@ -1570,6 +1711,9 @@ async function forget($: EngineInterface) {
 // race only one sees the old id and drops.
 async function fresh($: EngineInterface, agentId?: string) {
   if (agentId) return
+  // Taken before the id is read: a /clear anywhere from here to the end of
+  // the load below makes the loaded list another conversation's.
+  let at = epoch
   let id = ''
   try {
     id = await $.session.id()
@@ -1577,11 +1721,22 @@ async function fresh($: EngineInterface, agentId?: string) {
     return
   }
   let moved = false
+  let adopted = false
   await update($, sessionId, was => {
     moved = was !== '' && was !== id
+    adopted = was !== id
     return id
   })
-  if (moved) await forget($)
+  if (moved) {
+    await forget($)
+    at = epoch
+  }
+  // A conversation seen for the first time (a start, a resume, a /clear) shows
+  // the task list Claude Code saved for it, if any.
+  if (adopted) {
+    const saved = await savedChecklist($, id)
+    if (saved.length && at === epoch) await update($, checklist, () => saved)
+  }
 }
 
 export const register: Register = (on, options) => {
@@ -1590,6 +1745,9 @@ export const register: Register = (on, options) => {
   // bar is at the top of the pane.
   const showPane = options.showPane !== false
   const showBand = options.showBand === true
+  // Both off: nothing draws this mod's data, so no hook watches, reads or times
+  // anything. A switch change reloads the mod, which cancels the old timer.
+  const isTracking = showPane || showBand
 
   on('session.start', async ($, e, next) => {
     await $.command.register({
@@ -1597,6 +1755,7 @@ export const register: Register = (on, options) => {
       description: 'Show the Agents pane: what each helper is doing, its tokens, cost and time',
     })
     const result = await next(e)
+    if (!isTracking) return result
     await fresh($)
     try {
       window = (await $.session.usage()).context.window || window
@@ -1622,9 +1781,12 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'agents-panel' }, async $ => {
     if (!showPane) {
-      return { text: 'The Agents pane is switched off. Turn "Show the Agents pane" back on in /config.' }
+      return { text: 'The Agents pane is switched off. Turn "Show the Agents and Checklist panes" back on in /config.' }
     }
-    await openPane($)
+    // Checklist first, then Agents made the newest, so Agents is in front even
+    // when it was already open (opening an open pane does not raise it).
+    await openChecklist($)
+    await openInFront($)
     return { text: 'Agents pane opened.' }
   })
 
@@ -1642,6 +1804,7 @@ export const register: Register = (on, options) => {
   })
 
   on('agent.spawn', async ($, e, next) => {
+    if (!isTracking) return next(e)
     await fresh($, e.parentAgentId)
     const result = await next(e)
     if (result.agentId) {
@@ -1665,6 +1828,7 @@ export const register: Register = (on, options) => {
 
   // turn.step streams: forward every chunk untouched, then read the finished response.
   on('turn.step', async function* ($, e, next) {
+    if (!isTracking) return yield* next(e)
     await fresh($, e.agentId)
     const result = yield* next(e)
     const at = await $.clock.now()
@@ -1696,7 +1860,9 @@ export const register: Register = (on, options) => {
   // Every tool call of the session, main loop and helpers alike: what each loop
   // is doing, and every shell command (Bash, Monitor) from start to end.
   on('tool.call', async ($, e, next) => {
+    if (!isTracking) return next(e)
     await fresh($, e.agentId)
+    const callEpoch = epoch
     const at = await $.clock.now()
     // A helper the pane does not know (one of an earlier conversation) gets no row.
     const known = await isKnown($, e.agentId)
@@ -1744,14 +1910,28 @@ export const register: Register = (on, options) => {
       return result
     } finally {
       const end = await $.clock.now()
-      await endCallOn($, e, result, end)
+      await endCallOn($, e, result, end, callEpoch)
       if (isShell) await settleShell($, id, result, end)
       if (call) await settleCodex($, codexId, result, end)
     }
   })
 
+  // The main loop's turn: from its start to its end the main row says Thinking.
+  // turn.complete fires on every end (an answer, an interrupt, a refusal, an
+  // error), so the state cannot stay on.
+  on('turn.start', async ($, e, next) => {
+    if (isTracking && !e.agentId) {
+      await fresh($)
+      const at = await $.clock.now()
+      await update($, main, m => ({ ...m, turnAt: at }))
+    }
+    return next(e)
+  })
+
   on('turn.complete', async ($, e, next) => {
+    if (!isTracking) return next(e)
     await fresh($, e.agentId)
+    if (!e.agentId) await update($, main, m => ({ ...m, turnAt: 0 }))
     if (e.agentId) {
       const at = await $.clock.now()
       const status = e.isAborted ? 'stopped' : e.reason === 'error' || e.reason === 'refusal' ? 'failed' : 'done'
@@ -1764,6 +1944,7 @@ export const register: Register = (on, options) => {
 
   // The owner's own prompts, and background tasks' notifications that end a shell.
   on('prompt.submit', async ($, e, next) => {
+    if (!isTracking) return next(e)
     await fresh($)
     const at = await $.clock.now()
     const kind = e.origin.kind
@@ -1790,12 +1971,16 @@ export const register: Register = (on, options) => {
     // the one in front when a session starts. The other mods
     // open theirs before their next(e). Re-opening an open pane does not raise it,
     // so only the order of the opens decides.
-    if (opensNow && showPane) await openInFront($)
+    if (opensNow && showPane) {
+      await openChecklist($)
+      await openInFront($)
+    }
     return result
   }).catch(($, e, next) => next(e))
 
   // A notification delivered into a helper's loop reaches it as a row, not a prompt.
   on('session.append', async ($, e, next) => {
+    if (!isTracking) return next(e)
     await fresh($, e.agentId)
     if (e.origin.kind === 'task-notification') {
       const body = e.message.content
@@ -1964,7 +2149,12 @@ export const register: Register = (on, options) => {
       )
     }
 
-    const [mainHead, mainTail] = doingNow(mainRow, t)
+    // A row stored by an older version has no turnAt, which reads as no turn running.
+    const mainState = mainStateOf(mainRow, running.length, liveShells.length)
+    const isMainWorking = mainRow.active > 0 || !!mainRow.turnAt
+    // Under the state, what it did last; a call in flight is the state itself.
+    const [mainHead, mainTail] = mainRow.active > 0 ? ['', ''] : doingNow(mainRow, t)
+    const mainLast = mainRow.doing ? 'last action' : 'said'
     const promptTail = mainRow.lastPrompt ? `" · ${span(t - mainRow.lastPromptAt)} ago` : ''
 
     // The helpers' progress bar, at the top of the pane: on
@@ -1996,7 +2186,9 @@ export const register: Register = (on, options) => {
         <Text bold>{fit(`${plural(running.length, 'agent')} · ${plural(liveShells.length, 'shell')} running`, cols)}</Text>
         {isBandShown(batch, t) && helpersBar()}
         <Box flexDirection="column" marginTop={1}>
-          <Text wrap="truncate-end"><Text color={BAND_ORANGE} bold>● main</Text> {mainHead ? withTail(mainHead, mainTail, cols - 7) : 'idle'}</Text>
+          <Text wrap="truncate-end" color={BAND_ORANGE} bold>● Main · Orchestrator</Text>
+          <Text wrap="truncate-end" bold color={isMainWorking ? BAND_ORANGE : undefined}>{fit(mainState, cols)}</Text>
+          {mainHead ? <Text dimColor wrap="truncate-end">{withTail(`${mainLast}: ${mainHead}`, mainTail, cols)}</Text> : null}
           {mainRow.lastPrompt ? <Text dimColor wrap="truncate-end">{withTail(`last "${mainRow.lastPrompt}`, promptTail, cols)}</Text> : null}
         </Box>
         <Box flexDirection="column" marginTop={1}>
@@ -2040,6 +2232,53 @@ export const register: Register = (on, options) => {
         )}
         {!collapsed && finished.map(card)}
         {all.length > 0 && <Text dimColor>Cost is approximate: list prices times the tokens each helper used.</Text>}
+      </Box>
+    )
+  })
+
+  // The main session's own task list: one heading per group, one line per step
+  // (check mark done, ⏳ running, ☐ to do; the owner's steps start "You:"), then the
+  // three-line footer worked out from the same rows.
+  on('ui.render', { component: 'Pane', requestId: CHECKLIST_PANE }, async ($, e) => {
+    const { Box, Text } = $.ui.resolve(e)
+    if (!showPane) {
+      return <Text dimColor>The Checklist is switched off in /config ("Show the Agents and Checklist panes").</Text>
+    }
+    const list = await read($, checklist)
+    if (list.length === 0) {
+      return (
+        <Box flexDirection="column" paddingX={1}>
+          <Text dimColor>No checklist yet in this session.</Text>
+        </Box>
+      )
+    }
+    const foot = checklistFooter(list)
+    const line = (step: ChecklistStep) => {
+      const isDone = step.status === 'completed'
+      const isRunning = step.status === 'in_progress'
+      const mark = isDone ? '✔' : isRunning ? '⏳' : '☐'
+      const color = isDone ? 'success' : isRunning ? BAND_ORANGE : undefined
+      return (
+        <Text key={`step-${step.id}`}>
+          <Text color={color} bold>{mark} </Text>
+          {step.isOwners && <Text bold color={isDone ? undefined : BAND_ORANGE}>You: </Text>}
+          <Text>{isRunning && step.active ? step.active : step.title}</Text>
+        </Text>
+      )
+    }
+    return (
+      <Box flexDirection="column" paddingX={1}>
+        {checklistGroups(list).map((g, i) => (
+          <Box key={`group-${i}`} flexDirection="column" marginTop={i === 0 ? 0 : 1}>
+            {g.heading ? <Text bold>{g.heading}</Text> : null}
+            {g.steps.map(line)}
+          </Box>
+        ))}
+        <Box flexDirection="column" marginTop={1}>
+          <Text bold>{foot.done}</Text>
+          <Text>{foot.now}</Text>
+          <Text>{foot.you}</Text>
+        </Box>
       </Box>
     )
   })

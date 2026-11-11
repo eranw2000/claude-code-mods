@@ -145,6 +145,8 @@ export const register: Register = (on, options) => {
       description: 'Show the Thread pane: each prompt you typed, with the first paragraph of the answer',
     })
     const result = await next(e)
+    // Off: nothing draws the thread, so nothing is recorded, read or timed.
+    if (!showPane) return result
     await fresh($)
     // A reload starts the module over, timer included.
     if ((await read($, thread)).length > 0) wake($)
@@ -176,6 +178,7 @@ export const register: Register = (on, options) => {
   // prompt of its own (a background job's notice) replaces it, so the pane
   // shows where the work ended up. A helper's turn writes nothing here.
   on('turn.complete', async ($, e, next) => {
+    if (!showPane) return next(e)
     await fresh($, e.agentId)
     if (!e.agentId) {
       const answer = fit(firstParagraph(e.answer), ANSWER_KEEP)
@@ -197,22 +200,26 @@ export const register: Register = (on, options) => {
   // A conversation switch can first show on any main-loop event, so these ask too,
   // and the Thread pane drops the old prompts as soon as the Agents pane does.
   on('agent.spawn', async ($, e, next) => {
+    if (!showPane) return next(e)
     await fresh($, e.parentAgentId)
     return next(e)
   })
 
   on('tool.call', async ($, e, next) => {
+    if (!showPane) return next(e)
     await fresh($, e.agentId)
     return next(e)
   })
 
   on('turn.step', async function* ($, e, next) {
+    if (!showPane) return yield* next(e)
     await fresh($, e.agentId)
     return yield* next(e)
   })
 
   // The owner's own prompts.
   on('prompt.submit', async ($, e, next) => {
+    if (!showPane) return next(e)
     await fresh($)
     const kind = e.origin.kind
     if ((kind === 'composer' || kind === 'bridge') && !e.isMeta) {
@@ -240,6 +247,7 @@ export const register: Register = (on, options) => {
   // The engine storing the owner's prompt as a transcript row: tie the row to
   // its prompt, so a press on the prompt can scroll to it.
   on('session.append', async ($, e, next) => {
+    if (!showPane) return next(e)
     await fresh($, e.agentId)
     const kind = e.origin.kind
     if (!e.agentId && e.door === 'prompt' && (kind === 'composer' || kind === 'bridge') && !e.message.isMeta) {

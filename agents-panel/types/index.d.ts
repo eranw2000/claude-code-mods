@@ -112,11 +112,22 @@ export type PlanStep = {
   status: 'pending' | 'in_progress' | 'completed'
 }
 
+// One step of the MAIN session's own task list, drawn in the Checklist tab.
+// `group` and `isOwners` come from the TaskCreate / TaskUpdate `metadata`
+// fields "group" and "owner" (any owner value marks a step only you can do).
+export type ChecklistStep = PlanStep & {
+  group: string
+  isOwners: boolean
+}
+
 // The main loop of the session.
 export type MainRow = Activity & {
   // The last prompt the owner typed (first line), and when.
   lastPrompt: string
   lastPromptAt: number
+  // When the main loop's running turn started; 0 while no turn runs. A value
+  // stored by an older version has no such field, read as 0.
+  turnAt: number
 }
 
 // One shell command of the session, by whoever ran it.
@@ -156,6 +167,8 @@ declare module 'claude-code' {
       sessionId: string
       // Whether the owner has typed a prompt in this conversation yet.
       hasPrompted: boolean
+      // The main session's task list, in creation order.
+      checklist: ChecklistStep[]
     }
   }
 }

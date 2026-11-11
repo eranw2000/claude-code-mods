@@ -11,6 +11,7 @@ Five mods for Claude Code that draw five live side panes (Agents, Thread, Files,
   - A progress bar for the current batch of helpers at the top of the pane: tasks done, percent and time left. It can also be drawn above the prompt.
   - What the main loop is doing, and every shell command of the session, with background commands kept until they report back.
   - A card for each Codex run started through `codex_delegate.py` (from [claude-release-workflow](https://github.com/eranw2000/claude-release-workflow)): what it reviews, its model and effort, live tokens from its session log, time against its limit or against how long similar past runs took, and its end in words (finished, timed out, refused, and so on).
+  - A Checklist tab beside it: the session's own task list, the steps Claude makes with its task tools, under their headings, with a Done, Now and You line at the bottom. A step whose `metadata` carries any `owner` is listed under You, as a step only you can do.
   - `/agents-panel` opens the pane.
 - **`thread-panel`**: a live Thread pane, your conversation at a glance.
   - Each prompt you typed in this conversation, oldest first, with the first paragraph of Claude's answer under it, and how long ago each was.
@@ -29,6 +30,7 @@ Five mods for Claude Code that draw five live side panes (Agents, Thread, Files,
 - **`sidekick-panel`**: a Sidekick pane, a box beside the chat that answers and does work.
   - Type a question about this conversation. Claude answers from the conversation so far, and neither the question nor the answer enters the chat.
   - Ask for work and the pane offers a **Do it** button. Press it and a background helper does the job with the session's tools, under your permission rules and hooks. Start a line with `!` to skip the button.
+  - On a Mac, a question can carry an image: press **paste image** to take the picture on the clipboard, or drag an image file onto the box.
   - The answer or the helper's report stays in the pane. The helper shows in the Agents pane while it works.
   - It opens when a session starts, and `/sidekick-panel` opens it too.
 
@@ -71,16 +73,16 @@ claude plugin update sidekick-panel@claude-code-mods
 Each mod has switches in `/config`:
 
 - `agents-panel`
-  - **Show the Agents pane** (on by default). Off: the pane never opens by itself.
+  - **Show the Agents and Checklist panes** (on by default). Off: neither opens by itself, `/agents-panel` says it is off, and nothing is tracked unless the bar above the prompt is on.
   - **Show the progress bar above the prompt too** (off by default). The bar is always at the top of the Agents pane; on, it is also drawn above the prompt while helpers run.
 - `files-panel`
   - **Show the files panel** (on by default). Off: nothing is tracked and the pane never opens.
 - `thread-panel`
-  - **Show the Thread pane** (on by default). Off: the pane never opens by itself and `/thread-panel` says it is off.
+  - **Show the Thread pane** (on by default). Off: the pane never opens by itself, nothing is recorded and `/thread-panel` says it is off.
 - `usage-panel`
   - **Show the Usage pane** (on by default). Off: the pane never opens by itself, nothing is read and `/usage-panel` says it is off.
 - `sidekick-panel`
-  - **Show the Sidekick pane** (on by default). Off: the pane never opens by itself and `/sidekick-panel` says it is off.
+  - **Show the Sidekick pane** (on by default). Off: the pane never opens by itself, an open pane shows no question box, nothing is kept and `/sidekick-panel` says it is off.
   - **How hard the Sidekick pane thinks** (`session` by default; or `low`, `medium`, `high`). `session` thinks as hard as the main work and reads the conversation from the prompt cache. A fixed level can make the first answer at that level re-send the whole conversation once.
 
 ## What the mods run

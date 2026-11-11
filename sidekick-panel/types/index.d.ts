@@ -2,8 +2,9 @@
 export type AskStatus = 'asking' | 'answered' | 'failed'
 
 // 'ask' is answered with no tools; 'do' is a line starting with "!", carried
-// out by a helper that has them.
-export type AskKind = 'ask' | 'do'
+// out by a helper that has them; 'see' is a question with an image: a helper
+// whose only tool is Read reports on the image, and a fork answers from that.
+export type AskKind = 'ask' | 'do' | 'see'
 
 export type AskEntry = {
   // Unique in the conversation: the time it was asked plus a counter.
@@ -18,6 +19,11 @@ export type AskEntry = {
   // report arriving later still lands on it.
   closedByWatch?: boolean
   question: string
+  // The image sent with this line, its full path; absent when none was.
+  image?: string
+  // A question with an image that is longer than `question` keeps, until the
+  // fork that answers it has been asked. Absent otherwise.
+  fullQuestion?: string
   askedAt: number
   status: AskStatus
   // '' until the fork answered.
@@ -51,6 +57,10 @@ declare module 'claude-code' {
       // The main loop's newest reply, handed to the fork until the next
       // prompt carries it in the transcript; '' when none is owed.
       lastAnswer: string
+      // The image waiting for the next line, its full path; '' when none is.
+      attachment: string
+      // What the last press of the paste button has to say; '' when nothing.
+      attachNote: string
     }
   }
 }

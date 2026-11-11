@@ -1,13 +1,13 @@
 {
   "name": "sidekick-panel",
-  "version": "0.4.0",
-  "description": "A Sidekick pane: type a question about this conversation and get an answer from a fork of the session's own transcript, or ask for work and press Do it to have a helper do it with tools; the line and the result stay in the pane, out of the chat",
+  "version": "0.5.1",
+  "description": "A Sidekick pane: type a question about this conversation, with an image if you like, and get an answer from a fork of the session's own transcript, or ask for work and press Do it to have a helper do it with tools; the line and the result stay in the pane, out of the chat",
   "types": "./types/index.d.ts",
   "userConfig": {
     "showPane": {
       "type": "boolean",
       "title": "Show the Sidekick pane",
-      "description": "The side pane with the question box. Off: it never opens by itself and /sidekick-panel says it is off.",
+      "description": "The side pane with the question box. Off: it never opens by itself, an open pane shows no question box, nothing is kept and /sidekick-panel says it is off.",
       "default": true
     },
     "effort": {

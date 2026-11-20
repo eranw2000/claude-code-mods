@@ -7,6 +7,6 @@
     { "name": "files-panel", "source": "./files-panel" },
     { "name": "thread-panel", "source": "./thread-panel" },
     { "name": "usage-panel", "source": "./usage-panel" },
-    { "name": "sidekick-panel", "source": "./sidekick-panel" }
+    { "name": "ask-act-panel", "source": "./ask-act-panel" }
   ]
 }

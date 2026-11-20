@@ -1,6 +1,6 @@
 # Claude Code mods
 
-Five mods for Claude Code that draw five live side panes (Agents, Thread, Files, Usage and Sidekick). They show what Claude and its helpers are doing while they work and how much of your usage limits you have used, and they give you a box beside the chat for side questions and side jobs. A mod is a Claude Code plugin whose hooks draw on Claude's own screen, so these panes update by themselves as the session runs.
+Five mods for Claude Code that draw five live side panes (Agents, Thread, Files, Usage and Ask&Act). They show what Claude and its helpers are doing while they work and how much of your usage limits you have used, and they give you a box beside the chat for side questions and side jobs. A mod is a Claude Code plugin whose hooks draw on Claude's own screen, so these panes update by themselves as the session runs.
 
 - **`agents-panel`**: a live Agents pane.
   - One card per helper agent: its task, what it is doing now, its recent actions, its plan steps, tokens, an approximate cost and its time. Each helper type wears its own pixel crab (a developer with headphones and a laptop, a reviewer in a graduation cap, a planner in a captain's hat, and so on).
@@ -27,16 +27,16 @@ Five mods for Claude Code that draw five live side panes (Agents, Thread, Files,
   - Each usage limit Claude reports for your plan (this week, the last 5 hours), with a bar, the percent used and when it resets, in your own time zone.
   - The figures arrive with each of Claude's answers, and the pane says when the last one came. After you switch accounts, the new account's figures show with its next answer.
   - It opens with your first prompt, and `/usage-panel` opens it too.
-- **`sidekick-panel`**: a Sidekick pane, a box beside the chat that answers and does work.
+- **`ask-act-panel`**: a Ask&Act pane, a box beside the chat that answers and does work.
   - Type a question about this conversation. Claude answers from the conversation so far, and neither the question nor the answer enters the chat.
   - Ask for work and the pane offers a **Do it** button. Press it and a background helper does the job with the session's tools, under your permission rules and hooks. Start a line with `!` to skip the button.
   - On a Mac, a question can carry an image: press **paste image** to take the picture on the clipboard, or drag an image file onto the box.
   - The answer or the helper's report stays in the pane. The helper shows in the Agents pane while it works.
-  - It opens when a session starts, and `/sidekick-panel` opens it too.
+  - It opens when a session starts, and `/ask-act-panel` opens it too.
 
-Agents, Thread, Files and Sidekick start over when you `/clear` or start a new conversation. A helper still working in the Sidekick pane keeps going, and its report appears in the pane when it ends. Usage keeps its figures, since your account and limits stay the same.
+Agents, Thread, Files and Ask&Act start over when you `/clear` or start a new conversation. A helper still working in the Ask&Act pane keeps going, and its report appears in the pane when it ends. Usage keeps its figures, since your account and limits stay the same.
 
-![Five panes beside the conversation: Agents opens when a helper starts or with your first prompt, Thread lists your prompts and jumps to one on a click, Files shows every file the session reads or edits, Usage shows your account and how much of each limit is used, and Sidekick answers a side question or does a side job](docs/mods-flow.png)
+![Five panes beside the conversation: Agents opens when a helper starts or with your first prompt, Thread lists your prompts and jumps to one on a click, Files shows every file the session reads or edits, Usage shows your account and how much of each limit is used, and Ask&Act answers a side question or does a side job](docs/mods-flow.png)
 
 The diagram's source is [docs/mods-flow.drawio](docs/mods-flow.drawio).
 
@@ -50,12 +50,14 @@ claude plugin install agents-panel@claude-code-mods
 claude plugin install files-panel@claude-code-mods
 claude plugin install thread-panel@claude-code-mods
 claude plugin install usage-panel@claude-code-mods
-claude plugin install sidekick-panel@claude-code-mods
+claude plugin install ask-act-panel@claude-code-mods
 ```
 
-Restart Claude Code to load them. The panes open by themselves when there is something to show (Sidekick when a session starts; Agents, Thread, Files and Usage with your first prompt), or on `/agents-panel`, `/thread-panel`, `/files-panel`, `/usage-panel` and `/sidekick-panel`.
+Restart Claude Code to load them. The panes open by themselves when there is something to show (Ask&Act when a session starts; Agents, Thread, Files and Usage with your first prompt), or on `/agents-panel`, `/thread-panel`, `/files-panel`, `/usage-panel` and `/ask-act-panel`.
 
 If you installed `agents-panel` before version 0.7.0, the Thread pane was part of it. It is now `thread-panel`: install it as above to keep the pane.
+
+If you installed `sidekick-panel`, the same pane is now `ask-act-panel` (tab Ask&Act, command `/ask-act-panel`). Run `claude plugin uninstall sidekick-panel@claude-code-mods`, then `claude plugin marketplace update claude-code-mods`, then `claude plugin install ask-act-panel@claude-code-mods`, and restart Claude Code.
 
 To update later:
 
@@ -65,7 +67,7 @@ claude plugin update agents-panel@claude-code-mods
 claude plugin update files-panel@claude-code-mods
 claude plugin update thread-panel@claude-code-mods
 claude plugin update usage-panel@claude-code-mods
-claude plugin update sidekick-panel@claude-code-mods
+claude plugin update ask-act-panel@claude-code-mods
 ```
 
 ## Settings
@@ -81,13 +83,13 @@ Each mod has switches in `/config`:
   - **Show the Thread pane** (on by default). Off: the pane never opens by itself, nothing is recorded and `/thread-panel` says it is off.
 - `usage-panel`
   - **Show the Usage pane** (on by default). Off: the pane never opens by itself, nothing is read and `/usage-panel` says it is off.
-- `sidekick-panel`
-  - **Show the Sidekick pane** (on by default). Off: the pane never opens by itself, an open pane shows no question box, nothing is kept and `/sidekick-panel` says it is off.
-  - **How hard the Sidekick pane thinks** (`session` by default; or `low`, `medium`, `high`). `session` thinks as hard as the main work and reads the conversation from the prompt cache. A fixed level can make the first answer at that level re-send the whole conversation once.
+- `ask-act-panel`
+  - **Show the Ask&Act pane** (on by default). Off: the pane never opens by itself, an open pane shows no question box, nothing is kept and `/ask-act-panel` says it is off.
+  - **How hard the Ask&Act pane thinks** (`session` by default; or `low`, `medium`, `high`). `session` thinks as hard as the main work and reads the conversation from the prompt cache. A fixed level can make the first answer at that level re-send the whole conversation once.
 
 ## What the mods run
 
-The Codex card reads a run's own files (`.codex-runs/<run>/request.json`, `receipt.json` and `child-process.json` beside the run's `--out` file) and uses four read-only programs on macOS: `find`, `printenv`, `lsof` and `tail`. The Files pane asks `git` whether a file is committed. The Thread pane runs no programs. The Usage pane runs no programs either: it reads your email and plan from `.claude.json` in your home folder (or in `CLAUDE_CONFIG_DIR`, when that is set) once a minute and at each turn, keeps only those two values, and shows them only in the pane. The Sidekick pane runs no programs of its own. A question goes to the model with no tools. A line sent with **Do it** or `!` starts a background helper with the session's tools, which can run commands and change files, under your permission rules and hooks. Apart from what you ask that helper to do, none of the mods writes files or changes anything in your repositories.
+The Codex card reads a run's own files (`.codex-runs/<run>/request.json`, `receipt.json` and `child-process.json` beside the run's `--out` file) and uses four read-only programs on macOS: `find`, `printenv`, `lsof` and `tail`. The Files pane asks `git` whether a file is committed. The Thread pane runs no programs. The Usage pane runs no programs either: it reads your email and plan from `.claude.json` in your home folder (or in `CLAUDE_CONFIG_DIR`, when that is set) once a minute and at each turn, keeps only those two values, and shows them only in the pane. The Ask&Act pane runs no programs of its own. A question goes to the model with no tools. A line sent with **Do it** or `!` starts a background helper with the session's tools, which can run commands and change files, under your permission rules and hooks. Apart from what you ask that helper to do, none of the mods writes files or changes anything in your repositories.
 
 ## License
 

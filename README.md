@@ -57,7 +57,7 @@ Restart Claude Code to load them. The panes open by themselves when there is som
 
 If you installed `agents-panel` before version 0.7.0, the Thread pane was part of it. It is now `thread-panel`: install it as above to keep the pane.
 
-If you installed `sidekick-panel`, the same pane is now `ask-act-panel` (tab Ask&Act, command `/ask-act-panel`). Run `claude plugin uninstall sidekick-panel@claude-code-mods`, then install `ask-act-panel` as above.
+If you installed `sidekick-panel`, the same pane is now `ask-act-panel` (tab Ask&Act, command `/ask-act-panel`). Run `claude plugin uninstall sidekick-panel@claude-code-mods`, then `claude plugin marketplace update claude-code-mods`, then `claude plugin install ask-act-panel@claude-code-mods`, and restart Claude Code.
 
 To update later:
 
